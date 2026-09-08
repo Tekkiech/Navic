@@ -24,11 +24,14 @@ import paige.navic.util.core.Logger
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryPlayback
 import platform.AVFAudio.setActive
+import platform.AVFoundation.AVAudioTimePitchAlgorithmSpectral
+import platform.AVFoundation.AVAudioTimePitchAlgorithmVarispeed
 import platform.AVFoundation.AVPlayer
 import platform.AVFoundation.AVPlayerItem
 import platform.AVFoundation.AVPlayerItemDidPlayToEndTimeNotification
 import platform.AVFoundation.AVURLAsset
 import platform.AVFoundation.addPeriodicTimeObserverForInterval
+import platform.AVFoundation.audioTimePitchAlgorithm
 import platform.AVFoundation.currentItem
 import platform.AVFoundation.currentTime
 import platform.AVFoundation.duration
@@ -68,6 +71,7 @@ import platform.darwin.DISPATCH_TIME_FOREVER
 import platform.darwin.dispatch_semaphore_create
 import platform.darwin.dispatch_semaphore_signal
 import platform.darwin.dispatch_semaphore_wait
+import kotlin.math.abs
 
 class IOSMediaPlayerViewModel(
 	stateRepository: PlayerStateRepository,
@@ -465,6 +469,23 @@ class IOSMediaPlayerViewModel(
 		_uiState.update { it.copy(playbackSpeed = value) }
 	}
 
+	/**
+	 * AVPlayer has no public API for shifting pitch to an arbitrary value
+	 * independent of rate (that requires replacing AVPlayer with an
+	 * AVAudioEngine + AVAudioUnitTimePitch graph, a much larger rewrite).
+	 * What IS available is a per-item choice of time-pitch algorithm, so we
+	 * approximate: values at/near 1.0 keep the original pitch (Spectral),
+	 * anything else falls back to letting pitch track rate (Varispeed) as
+	 * the closest achievable effect.
+	 */
+	override fun setPlaybackPitch(value: Float) {
+		_uiState.update { it.copy(playbackPitch = value) }
+		player.currentItem?.audioTimePitchAlgorithm = pitchAlgorithmFor(value)
+	}
+
+	private fun pitchAlgorithmFor(pitch: Float) =
+		if (abs(pitch - 1f) < 0.01f) AVAudioTimePitchAlgorithmSpectral else AVAudioTimePitchAlgorithmVarispeed
+
 	override fun seek(normalized: Float) {
 		val duration = player.currentItem?.duration ?: return
 		val totalSeconds = CMTimeGetSeconds(duration)
@@ -585,12 +606,14 @@ class IOSMediaPlayerViewModel(
 
 	private fun createAVPlayerItem(url: NSURL): AVPlayerItem {
 		val headers = preferenceManager.customHeadersMap()
-		if (headers.isEmpty() || url.isFileURL()) {
-			return AVPlayerItem(url)
+		val item = if (headers.isEmpty() || url.isFileURL()) {
+			AVPlayerItem(url)
+		} else {
+			val options: Map<Any?, Any?> = mapOf("AVURLAssetHTTPHeaderFieldsKey" to headers)
+			AVPlayerItem(AVURLAsset(uRL = url, options = options))
 		}
-		val options: Map<Any?, Any?> = mapOf("AVURLAssetHTTPHeaderFieldsKey" to headers)
-
-		return AVPlayerItem(AVURLAsset(uRL = url, options = options))
+		item.audioTimePitchAlgorithm = pitchAlgorithmFor(_uiState.value.playbackPitch)
+		return item
 	}
 
 	private fun getStreamUrl(id: String): String {

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -31,6 +32,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kyant.capsule.ContinuousCapsule
 import com.kyant.capsule.ContinuousRoundedRectangle
+import navic.composeapp.generated.resources.Res
+import navic.composeapp.generated.resources.label_playback_pitch
+import navic.composeapp.generated.resources.label_playback_speed
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import paige.navic.shared.MediaPlayerViewModel
 import paige.navic.util.ui.rememberDraggableListState
@@ -50,7 +55,8 @@ fun PlaybackSpeedScreen() {
 	}
 
 	val selectedSpeed = playerState.playbackSpeed
-	val playbackSpeeds = listOf(
+	val selectedPitch = playerState.playbackPitch
+	val presets = listOf(
 		1.0f,
 		1.25f,
 		1.5f,
@@ -69,56 +75,93 @@ fun PlaybackSpeedScreen() {
 			.asPaddingValues()
 	) {
 		item {
-			Row(
-				modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-				verticalAlignment = Alignment.CenterVertically
-			) {
-				Slider(
-					value = selectedSpeed,
-					onValueChange = { newValue ->
-						val snappedValue = round(newValue * 100) / 100f
-						player.setPlaybackSpeed(snappedValue)
-					},
-					valueRange = 0.5f..2.0f,
-					modifier = Modifier.weight(1f),
-					colors = SliderDefaults.colors(
-						thumbColor = MaterialTheme.colorScheme.primary,
-						activeTrackColor = MaterialTheme.colorScheme.primary,
-						inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
-					)
-				)
-			}
-
-			Spacer(Modifier.height(8.dp))
+			PlaybackMultiplierSection(
+				label = stringResource(Res.string.label_playback_speed),
+				value = selectedSpeed,
+				presets = presets,
+				onValueChange = { player.setPlaybackSpeed(it) }
+			)
 		}
 
 		item {
-			Column(
-				modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-				horizontalAlignment = Alignment.CenterHorizontally,
-				verticalArrangement = Arrangement.Center
-			) {
-				Text(
-					text = "${selectedSpeed}x",
-					style = MaterialTheme.typography.titleMedium,
-					color = MaterialTheme.colorScheme.primary
-				)
+			Spacer(Modifier.height(4.dp))
+			HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
+			Spacer(Modifier.height(4.dp))
+		}
 
-				Row(
-					modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-					verticalAlignment = Alignment.CenterVertically,
-					horizontalArrangement = Arrangement.Center
-				) {
-					playbackSpeeds.forEach { speed ->
-						val isSelected = speed == selectedSpeed
-						SurfaceButton(
-							modifier = Modifier.weight(1f),
-							onClick = { player.setPlaybackSpeed(speed) },
-							text = "$speed",
-							isSelected = isSelected
-						)
-					}
-				}
+		item {
+			PlaybackMultiplierSection(
+				label = stringResource(Res.string.label_playback_pitch),
+				value = selectedPitch,
+				presets = presets,
+				onValueChange = { player.setPlaybackPitch(it) }
+			)
+		}
+	}
+}
+
+@Composable
+private fun PlaybackMultiplierSection(
+	label: String,
+	value: Float,
+	presets: List<Float>,
+	onValueChange: (Float) -> Unit
+) {
+	Text(
+		text = label,
+		style = MaterialTheme.typography.labelLarge,
+		color = MaterialTheme.colorScheme.onSurfaceVariant,
+		modifier = Modifier.padding(horizontal = 16.dp)
+	)
+
+	Spacer(Modifier.height(4.dp))
+
+	Row(
+		modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+		verticalAlignment = Alignment.CenterVertically
+	) {
+		Slider(
+			value = value,
+			onValueChange = { newValue ->
+				val snappedValue = round(newValue * 100) / 100f
+				onValueChange(snappedValue)
+			},
+			valueRange = 0.5f..2.0f,
+			modifier = Modifier.weight(1f),
+			colors = SliderDefaults.colors(
+				thumbColor = MaterialTheme.colorScheme.primary,
+				activeTrackColor = MaterialTheme.colorScheme.primary,
+				inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+			)
+		)
+	}
+
+	Spacer(Modifier.height(8.dp))
+
+	Column(
+		modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+		horizontalAlignment = Alignment.CenterHorizontally,
+		verticalArrangement = Arrangement.Center
+	) {
+		Text(
+			text = "${value}x",
+			style = MaterialTheme.typography.titleMedium,
+			color = MaterialTheme.colorScheme.primary
+		)
+
+		Row(
+			modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+			verticalAlignment = Alignment.CenterVertically,
+			horizontalArrangement = Arrangement.Center
+		) {
+			presets.forEach { preset ->
+				val isSelected = preset == value
+				SurfaceButton(
+					modifier = Modifier.weight(1f),
+					onClick = { onValueChange(preset) },
+					text = "$preset",
+					isSelected = isSelected
+				)
 			}
 		}
 	}

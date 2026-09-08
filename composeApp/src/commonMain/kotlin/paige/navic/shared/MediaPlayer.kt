@@ -67,6 +67,7 @@ abstract class MediaPlayerViewModel(
 	abstract fun toggleRepeat()
 	abstract fun shufflePlay(collection: DomainSongCollection)
 	abstract fun setPlaybackSpeed(value: Float)
+	abstract fun setPlaybackPitch(value: Float)
 
 	fun playNow(song: DomainSong) {
 		clearQueue()

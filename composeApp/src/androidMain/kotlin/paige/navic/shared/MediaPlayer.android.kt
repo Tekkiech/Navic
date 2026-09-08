@@ -670,7 +670,7 @@ class AndroidMediaPlayerViewModel(
 
 			player.shuffleModeEnabled = state.isShuffleEnabled
 			player.repeatMode = state.repeatMode
-			player.playbackParameters = PlaybackParameters(state.playbackSpeed)
+			player.playbackParameters = PlaybackParameters(state.playbackSpeed, state.playbackPitch)
 
 			val index = if (state.currentIndex in mediaItems.indices) state.currentIndex else 0
 
@@ -1072,10 +1072,19 @@ class AndroidMediaPlayerViewModel(
 	}
 
 	override fun setPlaybackSpeed(value: Float) {
+		val pitch = _uiState.value.playbackPitch
 		viewModelScope.launch {
-			controller?.setPlaybackSpeed(value)
+			controller?.playbackParameters = PlaybackParameters(value, pitch)
 		}
 		_uiState.update { it.copy(playbackSpeed = value) }
+	}
+
+	override fun setPlaybackPitch(value: Float) {
+		val speed = _uiState.value.playbackSpeed
+		viewModelScope.launch {
+			controller?.playbackParameters = PlaybackParameters(speed, value)
+		}
+		_uiState.update { it.copy(playbackPitch = value) }
 	}
 
 	private fun DomainSong.toMediaItem(): MediaItem {
