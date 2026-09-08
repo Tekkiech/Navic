@@ -57,8 +57,8 @@ extensions.configure<ApplicationExtension> {
 		}
 
 		getByName("debug") {
-			applicationIdSuffix = ".debug"
-			resValue("string", "app_name", "Navic (Dev)")
+			applicationIdSuffix = ".debug.speedpitch"
+			resValue("string", "app_name", "Navic (Speed/Pitch)")
 		}
 	}
 
