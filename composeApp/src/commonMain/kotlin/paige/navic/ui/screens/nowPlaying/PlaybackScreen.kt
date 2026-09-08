@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -402,6 +403,10 @@ private fun MultiplierPresetsRow(presets: List<Float>, selected: Float, onSelect
 			.padding(horizontal = 8.dp),
 		horizontalArrangement = Arrangement.Center
 	) {
+		// Explicit leading/trailing spacers, rather than relying on the Row's own padding, so the
+		// last chip always has clear space past it once scrolled fully to the end instead of
+		// sitting flush against (and getting clipped by) the sheet edge.
+		Spacer(Modifier.width(8.dp))
 		presets.forEach { preset ->
 			SurfaceButton(
 				modifier = Modifier,
@@ -410,6 +415,7 @@ private fun MultiplierPresetsRow(presets: List<Float>, selected: Float, onSelect
 				isSelected = preset == selected
 			)
 		}
+		Spacer(Modifier.width(8.dp))
 	}
 }
 
@@ -422,6 +428,7 @@ private fun SemitonePresetsRow(presets: List<Int>, selected: Int, onSelect: (Int
 			.padding(horizontal = 8.dp),
 		horizontalArrangement = Arrangement.Center
 	) {
+		Spacer(Modifier.width(8.dp))
 		presets.forEach { preset ->
 			SurfaceButton(
 				modifier = Modifier,
@@ -430,6 +437,7 @@ private fun SemitonePresetsRow(presets: List<Int>, selected: Int, onSelect: (Int
 				isSelected = preset == selected
 			)
 		}
+		Spacer(Modifier.width(8.dp))
 	}
 }
 

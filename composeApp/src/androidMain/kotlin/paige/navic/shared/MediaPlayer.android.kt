@@ -45,6 +45,9 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -432,8 +435,42 @@ class AndroidMediaPlayerViewModel(
 
 	private var pendingSyncState: PlayerUiState? = null
 
+	// Slider drags call setPlaybackSpeed/setPlaybackPitch on every raw drag delta so the label/thumb
+	// stay responsive; applying PlaybackParameters to the controller on every one of those ticks is a
+	// session round-trip that reconfigures the audio pipeline and was the source of drag jank, so the
+	// actual player write is debounced through this flow while the UI state updates immediately.
+	private val pendingPlaybackParameters = MutableStateFlow<PlaybackParameters?>(null)
+
 	init {
 		connectToService()
+		observePlaybackParameterRequests()
+	}
+
+	private fun observePlaybackParameterRequests() {
+		viewModelScope.launch {
+			pendingPlaybackParameters
+				.filterNotNull()
+				.collectLatest { params ->
+					// collectLatest cancels this delay (and the pending apply) if another drag
+					// tick arrives before it elapses, so the controller is only touched once
+					// per ~30ms of quiescence instead of once per raw slider callback.
+					delay(30.milliseconds)
+					controller?.playbackParameters = params
+				}
+		}
+	}
+
+	// ExoPlayer's PlaybackParameters can drift back to unity (e.g. certain media item transitions,
+	// or offload/gapless track handoffs) without the app explicitly requesting it. The stored UI
+	// state is the source of truth for the user's chosen speed/pitch, so re-assert it whenever it
+	// no longer matches what the player is actually doing.
+	private fun reapplyPlaybackParametersIfNeeded() {
+		val player = controller ?: return
+		val state = _uiState.value
+		val desired = PlaybackParameters(state.playbackSpeed, state.playbackPitch)
+		if (player.playbackParameters != desired) {
+			player.playbackParameters = desired
+		}
 	}
 
 	private fun connectToService() {
@@ -472,6 +509,7 @@ class AndroidMediaPlayerViewModel(
 				addListener(object : Player.Listener {
 					override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
 						updatePlaybackState()
+						reapplyPlaybackParametersIfNeeded()
 						skipUnavailableSong()
 						checkAndAutoFillQueue()
 					}
@@ -1073,17 +1111,13 @@ class AndroidMediaPlayerViewModel(
 
 	override fun setPlaybackSpeed(value: Float) {
 		val pitch = _uiState.value.playbackPitch
-		viewModelScope.launch {
-			controller?.playbackParameters = PlaybackParameters(value, pitch)
-		}
 		_uiState.update { it.copy(playbackSpeed = value) }
+		pendingPlaybackParameters.value = PlaybackParameters(value, pitch)
 	}
 
 	override fun setPlaybackPitch(value: Float) {
 		val speed = _uiState.value.playbackSpeed
-		viewModelScope.launch {
-			controller?.playbackParameters = PlaybackParameters(speed, value)
-		}
+		pendingPlaybackParameters.value = PlaybackParameters(speed, value)
 		_uiState.update { it.copy(playbackPitch = value) }
 	}
 
