@@ -338,6 +338,8 @@
 	<string name="option_playback_speed">Playback speed</string>
 	<string name="label_playback_speed">Speed</string>
 	<string name="label_playback_pitch">Pitch</string>
+	<string name="label_pitch_mode_semitones">Semitones</string>
+	<string name="label_pitch_mode_multiplier">Multiplier</string>
 	<string name="action_navigate_back">Navigate up</string>
 	<string name="action_log_out">Log out</string>
 	<string name="action_log_in">Log in</string>
