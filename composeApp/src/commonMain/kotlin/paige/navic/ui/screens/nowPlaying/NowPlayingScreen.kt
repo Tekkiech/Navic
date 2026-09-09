@@ -67,7 +67,12 @@ fun NowPlayingScreen() {
 		|| currentScreen is Screen.PlaybackSpeed
 		|| currentScreen is Screen.SongDetailSheet
 
-	val playerState by player.uiState.collectAsStateWithLifecycle()
+	// This is the root of the whole Now Playing sheet (including BlendBackground's cover-art
+	// blend/blur, which is not cheap) -- it only reads currentSong/isPaused, neither of which is
+	// progress, so it should collect uiStateIgnoringProgress rather than uiState. Otherwise the
+	// entire screen re-runs its composition on every ~200ms playback-position tick even though
+	// nothing it reads here actually changed (see uiStateIgnoringProgress's kdoc).
+	val playerState by player.uiStateIgnoringProgress.collectAsStateWithLifecycle()
 	val song = playerState.currentSong
 
 	val viewModel = koinViewModel<NowPlayingViewModel> { parametersOf(player) }

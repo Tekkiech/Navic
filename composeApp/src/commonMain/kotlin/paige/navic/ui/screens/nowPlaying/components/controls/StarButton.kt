@@ -24,7 +24,10 @@ fun NowPlayingStarButton(
 	onSetSongIsStarred: (Boolean) -> Unit
 ) {
 	val player = koinInject<MediaPlayerViewModel>()
-	val playerState by player.uiState.collectAsStateWithLifecycle()
+	// Doesn't read playerState.progress -- collect uiStateIgnoringProgress instead of uiState
+	// so this doesn't recompose on every ~200ms playback-position tick (see its kdoc on
+	// MediaPlayerViewModel).
+	val playerState by player.uiStateIgnoringProgress.collectAsStateWithLifecycle()
 	IconButton(
 		onClick = {
 			onSetSongIsStarred(!songIsStarred)

@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import paige.navic.domain.manager.ConnectivityManager
 import paige.navic.domain.manager.DownloadManager
@@ -44,6 +47,22 @@ abstract class MediaPlayerViewModel(
 	@Suppress("PropertyName")
 	protected val _uiState = MutableStateFlow(PlayerUiState())
 	val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
+
+	// `progress` ticks every ~200ms during playback (and now on every drag tick -- see seek()'s
+	// kdoc on the Android implementation). Screens that call `player.uiState.collectAsState()`
+	// but never read `.progress` (album art, title/artist row, play/pause/shuffle/repeat buttons,
+	// star/more buttons, technical info) were still recomposing on every one of those ticks,
+	// because collectAsState()'s equality check is against the *whole* PlayerUiState data class --
+	// a progress-only change still produces a `!=` instance, so every reader is invalidated
+	// regardless of which field it actually uses.
+	//
+	// `uiStateIgnoringProgress` re-emits only when something other than `progress` changes, so
+	// composables that don't care about playback position can collect this instead of `uiState`
+	// and stop recomposing 5x/sec during ordinary playback. Screens that *do* need progress
+	// (the progress bar itself, the elapsed/remaining time labels) should keep using `uiState`.
+	val uiStateIgnoringProgress: StateFlow<PlayerUiState> = uiState
+		.distinctUntilChangedBy { it.copy(progress = 0f) }
+		.stateIn(viewModelScope, SharingStarted.Eagerly, _uiState.value)
 
 	protected fun isExplicit(song: DomainSong): Boolean {
 		return song.explicitStatus == DomainExplicitStatus.Explicit

@@ -39,7 +39,10 @@ fun NowPlayingMoreButton(
 ) {
 	val backStack = LocalNavStack.current
 	val player = koinInject<MediaPlayerViewModel>()
-	val playerState by player.uiState.collectAsState()
+	// Doesn't read playerState.progress -- collect uiStateIgnoringProgress instead of uiState
+	// so this doesn't recompose on every ~200ms playback-position tick (see its kdoc on
+	// MediaPlayerViewModel).
+	val playerState by player.uiStateIgnoringProgress.collectAsState()
 	val song = playerState.currentSong
 	var expanded by remember { mutableStateOf(false) }
 	var sleepTimerSheetShown by rememberSaveable { mutableStateOf(false) }

@@ -65,7 +65,10 @@ import paige.navic.ui.components.common.playPauseIconPainter
 @Composable
 fun NowPlayingButtonsRow() {
 	val player = koinInject<MediaPlayerViewModel>()
-	val playerState by player.uiState.collectAsState()
+	// Doesn't read playerState.progress -- collect uiStateIgnoringProgress instead of uiState
+	// so this doesn't recompose on every ~200ms playback-position tick (see its kdoc on
+	// MediaPlayerViewModel).
+	val playerState by player.uiStateIgnoringProgress.collectAsState()
 	val interactionSource = remember { MutableInteractionSource() }
 	val isPressed by interactionSource.collectIsPressedAsState()
 	val scale = remember { Animatable(1f) }
