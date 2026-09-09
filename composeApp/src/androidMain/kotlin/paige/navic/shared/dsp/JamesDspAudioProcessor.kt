@@ -42,6 +42,26 @@ object BassBoostController {
 	@Volatile
 	private var handle: JamesDspHandle = 0L
 
+	// Same jank pattern found and fixed everywhere else this session (see SoundEffectsController's
+	// requestEqualizerApply() kdoc for the full rationale): the gain slider's onValueChange calls
+	// setGainDb() on every raw drag tick, and until now that called straight through to apply()'s
+	// synchronous native setBassBoost() JNI call every single tick. UI state (_state) still updates
+	// synchronously so the slider/label stay responsive; the native write is debounced to ~30ms of
+	// drag quiescence via collectLatest+delay, reading whatever _state.value is once it actually
+	// fires -- so a release mid-window still applies the final dragged value. setEnabled() is a
+	// discrete one-shot toggle, not a drag stream, so it keeps calling apply() directly.
+	private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+	private val pendingGainApply = MutableStateFlow(0L)
+
+	init {
+		scope.launch {
+			pendingGainApply.filter { it != 0L }.collectLatest {
+				delay(30.milliseconds)
+				apply()
+			}
+		}
+	}
+
 	/** Called by [JamesDspAudioProcessor] once its native handle is ready. */
 	fun onHandleAllocated(handle: JamesDspHandle) {
 		this.handle = handle
@@ -60,7 +80,8 @@ object BassBoostController {
 
 	fun setGainDb(gainDb: Float) {
 		_state.update { it.copy(gainDb = gainDb) }
-		apply()
+		// Continuous slider drag -- debounced, see pendingGainApply's kdoc above.
+		pendingGainApply.update { it + 1 }
 	}
 
 	private fun apply() {
