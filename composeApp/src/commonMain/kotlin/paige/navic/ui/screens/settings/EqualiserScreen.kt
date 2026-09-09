@@ -48,7 +48,10 @@ import paige.navic.ui.screens.settings.components.SettingSelectionRow
 @Composable
 fun SettingsEqualiserScreen() {
 	val equaliserManager = koinInject<EqualiserManager>()
-	val config by equaliserManager.config.collectAsStateWithLifecycle()
+	// displayConfig reflects in-flight drag values immediately (see EqualiserManager's kdoc on
+	// setConfigDebounced) -- reading `config` directly here would only show the last *persisted*
+	// value, lagging a full drag+debounce cycle behind the finger.
+	val config by equaliserManager.displayConfig.collectAsStateWithLifecycle()
 	val scope = rememberCoroutineScope()
 
 	Scaffold(
@@ -117,9 +120,9 @@ fun SettingsEqualiserScreen() {
 									set(band, level)
 								}
 								val newConfig = config.copy(bandLevels = newLevels)
-								scope.launch {
-									equaliserManager.setConfig(newConfig)
-								}
+								// Continuous slider drag -- debounced, see
+								// EqualiserManager.setConfigDebounced()'s kdoc.
+								equaliserManager.setConfigDebounced(newConfig)
 							},
 							levelRange = config.bandLowerRange..config.bandUpperRange
 						)
