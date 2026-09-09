@@ -4,13 +4,21 @@ import androidx.media3.common.C
 import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.audio.BaseAudioProcessor
 import androidx.media3.common.util.UnstableApi
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import paige.navic.util.core.Logger
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val TAG = "JamesDsp"
 
@@ -113,6 +121,72 @@ object SoundEffectsController {
 	private val _graphicEqState = MutableStateFlow(GraphicEqUiState())
 	val graphicEqState: StateFlow<GraphicEqUiState> = _graphicEqState.asStateFlow()
 
+	// Continuous slider drags (per-band gain, level, drive, time constant, granularity) call their
+	// setX() on every raw drag tick so the label/thumb stay responsive; running the actual native
+	// apply*() JNI call on every one of those ticks re-runs a full native effect reconfigure (worst
+	// case: the Equalizer's applyEqualizer() resends the whole 15-band array via setMultiEqualizer
+	// on every single-band tick) and is the source of drag jank. Same fix as
+	// MediaPlayerViewModelAndroid.observePlaybackParameterRequests() applied to playback
+	// speed/pitch: the UI state (_equalizerState etc.) still updates synchronously on every tick,
+	// but the native write is debounced to ~30ms of drag quiescence via collectLatest+delay, reading
+	// whatever the latest UI state is once it actually fires -- so a release mid-window still
+	// applies the final dragged value, just ~30ms after the last tick instead of after every tick.
+	//
+	// Discrete one-shot interactions (enable switches, filter/interpolation/preset/mode pickers,
+	// reset buttons, the AutoEq device-preset apply) call their apply*() directly instead of going
+	// through these flows -- they're a single deliberate tap each, not a stream of ticks, so
+	// debouncing them would only add unwanted latency.
+	//
+	// One shared debounce flow per *effect* (not per parameter/band) because each effect's native
+	// setX() takes its whole parameter set at once regardless of which single field changed (e.g.
+	// setMultiEqualizer always takes the full 15-band array) -- so the right granularity to
+	// debounce at is "this effect needs re-applying", not "this specific band changed".
+	private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+	private val pendingEqualizerApply = MutableStateFlow(0L)
+	private val pendingCompanderApply = MutableStateFlow(0L)
+	private val pendingStereoEnhancementApply = MutableStateFlow(0L)
+	private val pendingVacuumTubeApply = MutableStateFlow(0L)
+
+	init {
+		observeDebouncedApplies()
+	}
+
+	private fun observeDebouncedApplies() {
+		// Ticks are just a counter, not the parameter itself -- apply*() below always reads the
+		// current *State.value at the moment it actually fires, so whichever tick is "latest" when
+		// the 30ms delay elapses is always fully up to date. 0L is the pre-first-tick sentinel,
+		// filtered out so this doesn't fire an extra apply at startup before any drag has happened.
+		scope.launch {
+			pendingEqualizerApply.filter { it != 0L }.collectLatest {
+				delay(30.milliseconds)
+				applyEqualizer()
+			}
+		}
+		scope.launch {
+			pendingCompanderApply.filter { it != 0L }.collectLatest {
+				delay(30.milliseconds)
+				applyCompander()
+			}
+		}
+		scope.launch {
+			pendingStereoEnhancementApply.filter { it != 0L }.collectLatest {
+				delay(30.milliseconds)
+				applyStereoEnhancement()
+			}
+		}
+		scope.launch {
+			pendingVacuumTubeApply.filter { it != 0L }.collectLatest {
+				delay(30.milliseconds)
+				applyVacuumTube()
+			}
+		}
+	}
+
+	private fun requestEqualizerApply() { pendingEqualizerApply.update { it + 1 } }
+	private fun requestCompanderApply() { pendingCompanderApply.update { it + 1 } }
+	private fun requestStereoEnhancementApply() { pendingStereoEnhancementApply.update { it + 1 } }
+	private fun requestVacuumTubeApply() { pendingVacuumTubeApply.update { it + 1 } }
+
 	/** Called by [JamesDspAudioProcessor] once its native handle is ready. */
 	fun onHandleAllocated(handle: JamesDspHandle) {
 		this.handle = handle
@@ -156,7 +230,8 @@ object SoundEffectsController {
 			if (bandIndex !in state.bandGainsDb.indices) return@update state
 			state.copy(bandGainsDb = state.bandGainsDb.toMutableList().apply { this[bandIndex] = gainDb })
 		}
-		applyEqualizer()
+		// Continuous slider drag -- debounced, see requestEqualizerApply()'s kdoc above.
+		requestEqualizerApply()
 	}
 
 	fun resetEqualizerBands() {
@@ -171,12 +246,14 @@ object SoundEffectsController {
 
 	fun setCompanderTimeConstant(seconds: Float) {
 		_companderState.update { it.copy(timeConstantSec = seconds) }
-		applyCompander()
+		// Continuous slider drag -- debounced, see requestCompanderApply()'s kdoc above.
+		requestCompanderApply()
 	}
 
 	fun setCompanderGranularity(granularity: Int) {
 		_companderState.update { it.copy(granularity = granularity) }
-		applyCompander()
+		// Continuous slider drag (snapped to integer steps, but still dragged) -- debounced.
+		requestCompanderApply()
 	}
 
 	fun setCompanderTfTransform(tfTransform: Int) {
@@ -189,7 +266,8 @@ object SoundEffectsController {
 			if (bandIndex !in state.bandGainsDb.indices) return@update state
 			state.copy(bandGainsDb = state.bandGainsDb.toMutableList().apply { this[bandIndex] = gainDb })
 		}
-		applyCompander()
+		// Continuous slider drag -- debounced, see requestCompanderApply()'s kdoc above.
+		requestCompanderApply()
 	}
 
 	fun resetCompanderBands() {
@@ -224,7 +302,8 @@ object SoundEffectsController {
 
 	fun setStereoEnhancementLevel(level: Float) {
 		_stereoEnhancementState.update { it.copy(level = level) }
-		applyStereoEnhancement()
+		// Continuous slider drag -- debounced, see requestStereoEnhancementApply()'s kdoc above.
+		requestStereoEnhancementApply()
 	}
 
 	fun setVacuumTubeEnabled(enabled: Boolean) {
@@ -234,7 +313,8 @@ object SoundEffectsController {
 
 	fun setVacuumTubeDrive(driveDb: Float) {
 		_vacuumTubeState.update { it.copy(driveDb = driveDb) }
-		applyVacuumTube()
+		// Continuous slider drag -- debounced, see requestVacuumTubeApply()'s kdoc above.
+		requestVacuumTubeApply()
 	}
 
 	fun setGraphicEqEnabled(enabled: Boolean) {
