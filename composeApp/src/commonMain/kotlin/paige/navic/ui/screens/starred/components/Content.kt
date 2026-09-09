@@ -122,6 +122,9 @@ fun StarredScreenContent(
 	val backStack = LocalNavStack.current
 	val albums = albumsState.data.orEmpty()
 	val songs = songsState.data.orEmpty()
+	// Avoid an O(n) allDownloads.find{} per song per recomposition -- index once, only when the
+	// download list actually changes.
+	val downloadsBySongId = remember(allDownloads) { allDownloads.associateBy { it.songId } }
 	val artists = artistsState.data.orEmpty()
 	val downloadManager = koinInject<DownloadManager>()
 
@@ -213,8 +216,11 @@ fun StarredScreenContent(
 					flingBehavior = rememberSnapFlingBehavior(lazyGridState = gridState),
 					modifier = Modifier.fillMaxWidth().height(gridHeight)
 				) {
-					itemsIndexed(if (songs.size > 12) songs.slice(0..11) else songs) { index, song ->
-						val download = allDownloads.find { it.songId == song.id }
+					itemsIndexed(
+						if (songs.size > 12) songs.slice(0..11) else songs,
+						key = { _, song -> song.id }
+					) { index, song ->
+						val download = downloadsBySongId[song.id]
 						SongRow(
 							modifier = Modifier.weight(1f),
 							song = song,

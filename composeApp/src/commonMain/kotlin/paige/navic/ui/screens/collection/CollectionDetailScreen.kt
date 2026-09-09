@@ -104,6 +104,9 @@ fun CollectionDetailScreen(
 	val selectedAlbumRating by viewModel.selectedAlbumRating.collectAsStateWithLifecycle()
 	val otherAlbums by viewModel.otherAlbums.collectAsState()
 	val allDownloads by viewModel.allDownloads.collectAsState()
+	// Avoid an O(n) allDownloads.find{} per song per recomposition in the track list below --
+	// index once, only when the download list actually changes.
+	val downloadsBySongId = remember(allDownloads) { allDownloads.associateBy { it.songId } }
 	val downloadStatus by viewModel.collectionDownloadStatus()
 		.collectAsState(DownloadStatus.NOT_DOWNLOADED)
 
@@ -243,8 +246,8 @@ fun CollectionDetailScreen(
 										}
 									}
 								}
-								itemsIndexed(group.value) { index, song ->
-									val download = allDownloads.find { it.songId == song.id }
+								itemsIndexed(group.value, key = { _, song -> song.id }) { index, song ->
+									val download = downloadsBySongId[song.id]
 									Box {
 										CollectionDetailScreenSongRow(
 											song = song,
@@ -297,8 +300,11 @@ fun CollectionDetailScreen(
 							}
 						}
 					} else {
-						itemsIndexed(collection.songs) { index, song ->
-							val download = allDownloads.find { it.songId == song.id }
+						// Playlists (unlike albums) can legitimately contain the same song twice, so the key
+						// must include the index to stay unique -- a bare song.id here would crash on any
+						// playlist with a repeated track.
+						itemsIndexed(collection.songs, key = { index, song -> "${song.id}_$index" }) { index, song ->
+							val download = downloadsBySongId[song.id]
 							Box {
 								CollectionDetailScreenSongRow(
 									song = song,

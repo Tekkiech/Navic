@@ -19,7 +19,7 @@ fun LazyListScope.songListScreenContent(
 	selectedSong: DomainSong?,
 	selectedSongIsStarred: Boolean,
 	selectedSongRating: Int,
-	allDownloads: List<DownloadEntity>,
+	allDownloads: Map<String, DownloadEntity>,
 	onUpdateSelection: (DomainSong) -> Unit,
 	onClearSelection: () -> Unit,
 	onSetShareId: (String) -> Unit,
@@ -34,8 +34,8 @@ fun LazyListScope.songListScreenContent(
 ) {
 	val data = state.data.orEmpty()
 	if (data.isNotEmpty()) {
-		items(data) { song ->
-			val download = allDownloads.find { it.songId == song.id }
+		items(data, key = { it.id }) { song ->
+			val download = allDownloads[song.id]
 			SongListScreenItem(
 				modifier = Modifier.animateItem(),
 				song = song,

@@ -129,6 +129,9 @@ fun ArtistDetailScreen(
 	val starred by viewModel.starred.collectAsState()
 	val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
 	val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
+	// Avoid an O(n) allDownloads.find{} per song per recomposition in the top-songs grid below --
+	// index once, only when the download list actually changes.
+	val downloadsBySongId = remember(allDownloads) { allDownloads.associateBy { it.songId } }
 	val downloadStatus by viewModel.collectionDownloadStatus()
 		.collectAsState(DownloadStatus.NOT_DOWNLOADED)
 
@@ -312,9 +315,8 @@ fun ArtistDetailScreen(
 											flingBehavior = rememberSnapFlingBehavior(lazyGridState = gridState),
 											modifier = Modifier.fillMaxWidth().height(250.dp)
 										) {
-											itemsIndexed(songs) { index, song ->
-												val download =
-													allDownloads.find { it.songId == song.id }
+											itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+												val download = downloadsBySongId[song.id]
 												SongRow(
 													modifier = Modifier.weight(1f),
 													song = song,

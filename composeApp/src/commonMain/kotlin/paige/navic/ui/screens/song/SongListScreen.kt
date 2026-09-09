@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import paige.navic.data.database.entities.DownloadEntity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
@@ -76,6 +77,13 @@ fun SongListScreen(
 	val starred by viewModel.starred.collectAsStateWithLifecycle()
 	val selectedSongRating by viewModel.selectedSongRating.collectAsStateWithLifecycle()
 	val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
+	// SongListScreenItem needs to look up a song's download by id on every render; a flat list
+	// forced an O(n) linear scan per song per recomposition (see songListScreenContent's old
+	// allDownloads.find {...}). Indexing once here, only when the download list actually changes,
+	// turns every one of those lookups into O(1).
+	val downloadsBySongId = remember(allDownloads) {
+		allDownloads.associateBy { it.songId }
+	}
 
 	var shareId by remember { mutableStateOf<String?>(null) }
 	var shareExpiry by remember { mutableStateOf<Duration?>(null) }
@@ -164,7 +172,7 @@ fun SongListScreen(
 					},
 					onSetRating = { viewModel.rateSelectedSong(it) },
 					onDownload = { viewModel.downloadSong(it) },
-					allDownloads = allDownloads,
+					allDownloads = downloadsBySongId,
 					onCancelDownload = { viewModel.cancelDownload(it.id) },
 					onDeleteDownload = { viewModel.deleteDownload(it.id) }
 				)

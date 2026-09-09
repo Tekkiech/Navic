@@ -71,6 +71,9 @@ fun GenreDetailScreenContent(
 	onAddAlbumToQueue: () -> Unit,
 ) {
 	val songs = songsState.data.orEmpty().take(12)
+	// Avoid an O(n) allDownloads.find{} per song per recomposition -- index once, only when the
+	// download list actually changes.
+	val downloadsBySongId = remember(allDownloads) { allDownloads.associateBy { it.songId } }
 
 	LazyVerticalGrid(
 		columns = GridCells.Fixed(2),
@@ -101,8 +104,8 @@ fun GenreDetailScreenContent(
 				flingBehavior = rememberSnapFlingBehavior(lazyGridState = gridState),
 				modifier = Modifier.fillMaxWidth().height(gridHeight)
 			) {
-				itemsIndexed(songs) { index, song ->
-					val download = allDownloads.find { it.songId == song.id }
+				itemsIndexed(songs, key = { _, song -> song.id }) { index, song ->
+					val download = downloadsBySongId[song.id]
 					SongRow(
 						song = song,
 						selected = selectedSong == song,
