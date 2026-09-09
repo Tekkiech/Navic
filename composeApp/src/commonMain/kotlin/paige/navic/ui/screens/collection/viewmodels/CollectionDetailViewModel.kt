@@ -3,13 +3,17 @@ package paige.navic.ui.screens.collection.viewmodels
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterIsInstance
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import navic.composeapp.generated.resources.Res
 import navic.composeapp.generated.resources.notice_deleted_download
 import navic.composeapp.generated.resources.notice_download_started
@@ -41,17 +45,16 @@ class CollectionDetailViewModel(
 	connectivityManager: ConnectivityManager
 ) : ViewModel() {
 
+	// Used to seed this synchronously with a runBlocking{} call to repository.getLocalData()
+	// (a Room query) so `otherAlbums` below could read collectionState.value.data eagerly at
+	// construction time. That blocked the main thread on every album/playlist open (ViewModels
+	// are constructed on the main thread during navigation) for however long the DB query took --
+	// a real main-thread stall right when the user taps into an album, not just a theoretical one.
+	// UiState.Loading() with no data is a safe synchronous initial value; refreshCollection()
+	// (invoked from init{} below) populates the real data as soon as the local query completes,
+	// and `otherAlbums` is now derived reactively from this flow instead of reading it eagerly.
 	val collectionState: StateFlow<UiState<DomainSongCollection>>
-		field = MutableStateFlow(
-			runBlocking {
-				try {
-					val data = repository.getLocalData(collectionId)
-					if (data.songs.isEmpty()) UiState.Loading(data) else UiState.Success(data)
-				} catch (_: Exception) {
-					UiState.Loading()
-				}
-			}
-		)
+		field = MutableStateFlow<UiState<DomainSongCollection>>(UiState.Loading())
 
 	val starred: StateFlow<Boolean>
 		field = MutableStateFlow(false)
@@ -92,13 +95,19 @@ class CollectionDetailViewModel(
 			initialValue = emptyList()
 		)
 
-	val otherAlbums = (collectionState.value.data as? DomainAlbum)?.let { album ->
-		repository.getOtherAlbums(album.artistId, album.id)
-	}?.stateIn(
-		scope = viewModelScope,
-		started = SharingStarted.Lazily,
-		initialValue = emptyList()
-	) ?: MutableStateFlow(emptyList())
+	// Reacts to collectionState instead of reading collectionState.value.data eagerly at
+	// construction (see collectionState's kdoc above for why that had to change).
+	@OptIn(ExperimentalCoroutinesApi::class)
+	val otherAlbums: StateFlow<List<DomainAlbum>> = collectionState
+		.map { it.data }
+		.filterIsInstance<DomainAlbum>()
+		.distinctUntilChanged { old, new -> old.id == new.id }
+		.flatMapLatest { album -> repository.getOtherAlbums(album.artistId, album.id) }
+		.stateIn(
+			scope = viewModelScope,
+			started = SharingStarted.Lazily,
+			initialValue = emptyList()
+		)
 
 	init {
 		viewModelScope.launch {
