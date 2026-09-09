@@ -462,9 +462,28 @@ class AndroidMediaPlayerViewModel(
 	// actual player write is debounced through this flow while the UI state updates immediately.
 	private val pendingPlaybackParameters = MutableStateFlow<PlaybackParameters?>(null)
 
+	// Same class of bug, found in the Now Playing progress bar: every slider style
+	// (Flat/Squiggly/Yoyo/Slim, see NowPlayingProgressBar()) calls seek() on every raw drag tick,
+	// and until now that called straight through to controller.seekTo() -- a MediaController IPC
+	// round-trip into PlaybackService -- on every single tick. UI state (_uiState.progress) still
+	// updates synchronously so the thumb/time label track the finger instantly; the actual
+	// seekTo() call is debounced to ~30ms of drag quiescence via collectLatest+delay, so a release
+	// mid-window still seeks to the final dragged position.
+	//
+	// isSeekPending additionally guards startProgressLoop()/updateProgress(): those read the
+	// player's *real* (pre-seek) position every ~200ms, and without this guard they would
+	// overwrite the user's in-progress drag position with the stale real position mid-drag,
+	// visibly snapping the thumb backward -- a second, independent source of the same perceived
+	// stutter.
+	private val pendingSeek = MutableStateFlow<Float?>(null)
+
+	@Volatile
+	private var isSeekPending = false
+
 	init {
 		connectToService()
 		observePlaybackParameterRequests()
+		observeSeekRequests()
 	}
 
 	private fun observePlaybackParameterRequests() {
@@ -477,6 +496,21 @@ class AndroidMediaPlayerViewModel(
 					// per ~30ms of quiescence instead of once per raw slider callback.
 					delay(30.milliseconds)
 					controller?.playbackParameters = params
+				}
+		}
+	}
+
+	private fun observeSeekRequests() {
+		viewModelScope.launch(Dispatchers.Main.immediate) {
+			pendingSeek
+				.filterNotNull()
+				.collectLatest { normalized ->
+					delay(30.milliseconds)
+					controller?.let {
+						val target = (it.duration * normalized).toLong()
+						it.seekTo(target)
+					}
+					isSeekPending = false
 				}
 		}
 	}
@@ -754,7 +788,9 @@ class AndroidMediaPlayerViewModel(
 			while (controller?.isPlaying == true) {
 				val player = controller ?: break
 				val duration = player.duration
-				if (duration > 0) {
+				// Don't clobber an in-progress/pending seek drag with the stale pre-seek position
+				// -- see pendingSeek's kdoc above.
+				if (duration > 0 && !isSeekPending) {
 					val progress =
 						(player.currentPosition.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
 					_uiState.update { it.copy(progress = progress) }
@@ -765,6 +801,7 @@ class AndroidMediaPlayerViewModel(
 	}
 
 	private fun updateProgress() {
+		if (isSeekPending) return
 		controller?.let { player ->
 			val duration = player.duration
 			if (duration > 0) {
@@ -1112,15 +1149,10 @@ class AndroidMediaPlayerViewModel(
 	}
 
 	override fun seek(normalized: Float) {
-		viewModelScope.launch(Dispatchers.Main.immediate) {
-			controller?.let {
-				val target = (it.duration * normalized).toLong()
-				it.seekTo(target)
-				_uiState.update { state ->
-					state.copy(progress = normalized)
-				}
-			}
-		}
+		isSeekPending = true
+		_uiState.update { state -> state.copy(progress = normalized) }
+		// Continuous slider drag -- debounced, see pendingSeek's kdoc above.
+		pendingSeek.value = normalized
 	}
 
 	override fun onCleared() {
