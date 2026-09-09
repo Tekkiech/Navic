@@ -83,8 +83,10 @@ import paige.navic.ui.screens.genre.GenreListScreen
 import paige.navic.ui.screens.library.LibraryScreen
 import paige.navic.ui.screens.login.LoginScreen
 import paige.navic.ui.screens.lyrics.LyricsScreen
+import paige.navic.ui.screens.nowPlaying.DevicePresetScreen
 import paige.navic.ui.screens.nowPlaying.NowPlayingScreen
 import paige.navic.ui.screens.nowPlaying.PlaybackSpeedScreen
+import paige.navic.ui.screens.nowPlaying.SoundEffectsScreen
 import paige.navic.ui.screens.playlist.PlaylistListScreen
 import paige.navic.ui.screens.queue.QueueScreen
 import paige.navic.ui.screens.radio.RadioListScreen
@@ -338,6 +340,12 @@ private fun entryProvider(
 		}
 		entry<Screen.PlaybackSpeed>(metadata = BottomSheetSceneStrategy.bottomSheet()) {
 			PlaybackSpeedScreen()
+		}
+		entry<Screen.SoundEffects>(metadata = BottomSheetSceneStrategy.bottomSheet()) {
+			SoundEffectsScreen()
+		}
+		entry<Screen.DevicePreset> {
+			DevicePresetScreen()
 		}
 		entry<Screen.CollectionDetail>(metadata = detailPane("root")) { key ->
 			CollectionDetailScreen(key.collectionId, key.tab)

@@ -52,6 +52,7 @@ import navic.composeapp.generated.resources.action_view_artist
 import navic.composeapp.generated.resources.info_click_to_retry
 import navic.composeapp.generated.resources.info_download_failed
 import navic.composeapp.generated.resources.option_playback_speed
+import navic.composeapp.generated.resources.option_sound_effects
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import paige.navic.LocalNavStack
@@ -72,6 +73,7 @@ import paige.navic.icons.outlined.Close
 import paige.navic.icons.outlined.Delete
 import paige.navic.icons.outlined.Download
 import paige.navic.icons.outlined.DownloadOff
+import paige.navic.icons.outlined.Grid
 import paige.navic.icons.outlined.Info
 import paige.navic.icons.outlined.PlaylistAdd
 import paige.navic.icons.outlined.PlaylistRemove
@@ -117,6 +119,8 @@ fun SongSheet(
 	onSleepTimer: (() -> Unit)? = null,
 	showPlaybackSpeed: Boolean = false,
 	onPlaybackSpeed: (() -> Unit)? = null,
+	showSoundEffects: Boolean = false,
+	onSoundEffects: (() -> Unit)? = null,
 	useSongTheme: Boolean = true
 ) {
 	val preferenceManager = koinInject<PreferenceManager>()
@@ -456,6 +460,27 @@ fun SongSheet(
 						},
 						onClick = dropUnlessResumed {
 							onPlaybackSpeed?.invoke()
+						},
+						colors = colors,
+						contentPadding = contentPadding
+					)
+				}
+
+				if (showSoundEffects) {
+					ListItem(
+						content = {
+							Text(
+								stringResource(Res.string.option_sound_effects)
+							)
+						},
+						leadingContent = {
+							Icon(
+								Icons.Outlined.Grid,
+								null
+							)
+						},
+						onClick = dropUnlessResumed {
+							onSoundEffects?.invoke()
 						},
 						colors = colors,
 						contentPadding = contentPadding

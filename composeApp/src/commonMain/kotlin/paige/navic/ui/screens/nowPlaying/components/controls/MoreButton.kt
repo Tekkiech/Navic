@@ -99,6 +99,11 @@ fun NowPlayingMoreButton(
 				onPlaybackSpeed = {
 					expanded = false
 					backStack.add(Screen.PlaybackSpeed)
+				},
+				showSoundEffects = true,
+				onSoundEffects = {
+					expanded = false
+					backStack.add(Screen.SoundEffects)
 				}
 			)
 		}

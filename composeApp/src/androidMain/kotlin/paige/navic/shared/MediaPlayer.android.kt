@@ -76,6 +76,15 @@ import paige.navic.domain.repositories.PlayerStateRepository
 import paige.navic.domain.repositories.SongRepository
 import paige.navic.shared.dsp.BassBoostUiState
 import paige.navic.shared.dsp.BassBoostController
+import paige.navic.shared.dsp.CompanderUiState
+import paige.navic.shared.dsp.CrossfeedUiState
+import paige.navic.shared.dsp.DspMasterUiState
+import paige.navic.shared.dsp.EqualizerUiState
+import paige.navic.shared.dsp.GraphicEqUiState
+import paige.navic.shared.dsp.ReverbUiState
+import paige.navic.shared.dsp.SoundEffectsController
+import paige.navic.shared.dsp.StereoEnhancementUiState
+import paige.navic.shared.dsp.VacuumTubeUiState
 import paige.navic.shared.dsp.JamesDspAudioProcessor
 import paige.navic.shared.dsp.JamesDspRenderersFactory
 import paige.navic.ui.core.PlayerUiState
@@ -1145,6 +1154,50 @@ class AndroidMediaPlayerViewModel(
 	override fun setBassBoostGain(gainDb: Float) {
 		BassBoostController.setGainDb(gainDb)
 	}
+
+	// Phase 2: rest of the JamesDSP effect suite, bridged the same way as Bass Boost above via
+	// SoundEffectsController (see its kdoc).
+	override val dspMasterState: StateFlow<DspMasterUiState> = SoundEffectsController.masterState
+	override fun setDspMasterEnabled(enabled: Boolean) = SoundEffectsController.setMasterEnabled(enabled)
+
+	override val equalizerState: StateFlow<EqualizerUiState> = SoundEffectsController.equalizerState
+	override fun setEqualizerEnabled(enabled: Boolean) = SoundEffectsController.setEqualizerEnabled(enabled)
+	override fun setEqualizerFilterType(filterType: Int) = SoundEffectsController.setEqualizerFilterType(filterType)
+	override fun setEqualizerInterpolationMode(interpolationMode: Int) =
+		SoundEffectsController.setEqualizerInterpolationMode(interpolationMode)
+	override fun setEqualizerBandGain(bandIndex: Int, gainDb: Float) =
+		SoundEffectsController.setEqualizerBandGain(bandIndex, gainDb)
+	override fun resetEqualizerBands() = SoundEffectsController.resetEqualizerBands()
+
+	override val companderState: StateFlow<CompanderUiState> = SoundEffectsController.companderState
+	override fun setCompanderEnabled(enabled: Boolean) = SoundEffectsController.setCompanderEnabled(enabled)
+	override fun setCompanderTimeConstant(seconds: Float) = SoundEffectsController.setCompanderTimeConstant(seconds)
+	override fun setCompanderGranularity(granularity: Int) = SoundEffectsController.setCompanderGranularity(granularity)
+	override fun setCompanderTfTransform(tfTransform: Int) = SoundEffectsController.setCompanderTfTransform(tfTransform)
+	override fun setCompanderBandGain(bandIndex: Int, gainDb: Float) =
+		SoundEffectsController.setCompanderBandGain(bandIndex, gainDb)
+	override fun resetCompanderBands() = SoundEffectsController.resetCompanderBands()
+
+	override val reverbState: StateFlow<ReverbUiState> = SoundEffectsController.reverbState
+	override fun setReverbEnabled(enabled: Boolean) = SoundEffectsController.setReverbEnabled(enabled)
+	override fun setReverbPreset(preset: Int) = SoundEffectsController.setReverbPreset(preset)
+
+	override val crossfeedState: StateFlow<CrossfeedUiState> = SoundEffectsController.crossfeedState
+	override fun setCrossfeedEnabled(enabled: Boolean) = SoundEffectsController.setCrossfeedEnabled(enabled)
+	override fun setCrossfeedMode(mode: Int) = SoundEffectsController.setCrossfeedMode(mode)
+
+	override val stereoEnhancementState: StateFlow<StereoEnhancementUiState> = SoundEffectsController.stereoEnhancementState
+	override fun setStereoEnhancementEnabled(enabled: Boolean) = SoundEffectsController.setStereoEnhancementEnabled(enabled)
+	override fun setStereoEnhancementLevel(level: Float) = SoundEffectsController.setStereoEnhancementLevel(level)
+
+	override val vacuumTubeState: StateFlow<VacuumTubeUiState> = SoundEffectsController.vacuumTubeState
+	override fun setVacuumTubeEnabled(enabled: Boolean) = SoundEffectsController.setVacuumTubeEnabled(enabled)
+	override fun setVacuumTubeDrive(driveDb: Float) = SoundEffectsController.setVacuumTubeDrive(driveDb)
+
+	override val graphicEqState: StateFlow<GraphicEqUiState> = SoundEffectsController.graphicEqState
+	override fun setGraphicEqEnabled(enabled: Boolean) = SoundEffectsController.setGraphicEqEnabled(enabled)
+	override fun applyGraphicEqCurve(deviceName: String, measurementSource: String, curveString: String) =
+		SoundEffectsController.setGraphicEqCurve(deviceName, measurementSource, curveString)
 
 	private fun DomainSong.toMediaItem(): MediaItem {
 		val metadataBuilder = MediaMetadata.Builder()

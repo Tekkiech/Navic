@@ -22,6 +22,14 @@ import paige.navic.domain.models.settings.ExplicitContentPlayback
 import paige.navic.domain.repositories.PlayerStateRepository
 import paige.navic.domain.repositories.SongRepository
 import paige.navic.shared.dsp.BassBoostUiState
+import paige.navic.shared.dsp.CompanderUiState
+import paige.navic.shared.dsp.CrossfeedUiState
+import paige.navic.shared.dsp.DspMasterUiState
+import paige.navic.shared.dsp.EqualizerUiState
+import paige.navic.shared.dsp.GraphicEqUiState
+import paige.navic.shared.dsp.ReverbUiState
+import paige.navic.shared.dsp.StereoEnhancementUiState
+import paige.navic.shared.dsp.VacuumTubeUiState
 import paige.navic.ui.core.PlayerUiState
 import kotlin.time.Duration.Companion.seconds
 
@@ -76,6 +84,49 @@ abstract class MediaPlayerViewModel(
 	open val bassBoostState: StateFlow<BassBoostUiState> = MutableStateFlow(BassBoostUiState()).asStateFlow()
 	open fun setBassBoostEnabled(enabled: Boolean) {}
 	open fun setBassBoostGain(gainDb: Float) {}
+
+	// Phase 2: rest of the JamesDSP effect suite (Equalizer, Compander, Reverb, Crossfeed,
+	// Stereo Enhancement, Vacuum Tube) plus a master enable switch for the whole chain. Same
+	// not-abstract/no-op-default pattern as Bass Boost above, for the same reason (iOS has no
+	// native module yet).
+	open val dspMasterState: StateFlow<DspMasterUiState> = MutableStateFlow(DspMasterUiState()).asStateFlow()
+	open fun setDspMasterEnabled(enabled: Boolean) {}
+
+	open val equalizerState: StateFlow<EqualizerUiState> = MutableStateFlow(EqualizerUiState()).asStateFlow()
+	open fun setEqualizerEnabled(enabled: Boolean) {}
+	open fun setEqualizerFilterType(filterType: Int) {}
+	open fun setEqualizerInterpolationMode(interpolationMode: Int) {}
+	open fun setEqualizerBandGain(bandIndex: Int, gainDb: Float) {}
+	open fun resetEqualizerBands() {}
+
+	open val companderState: StateFlow<CompanderUiState> = MutableStateFlow(CompanderUiState()).asStateFlow()
+	open fun setCompanderEnabled(enabled: Boolean) {}
+	open fun setCompanderTimeConstant(seconds: Float) {}
+	open fun setCompanderGranularity(granularity: Int) {}
+	open fun setCompanderTfTransform(tfTransform: Int) {}
+	open fun setCompanderBandGain(bandIndex: Int, gainDb: Float) {}
+	open fun resetCompanderBands() {}
+
+	open val reverbState: StateFlow<ReverbUiState> = MutableStateFlow(ReverbUiState()).asStateFlow()
+	open fun setReverbEnabled(enabled: Boolean) {}
+	open fun setReverbPreset(preset: Int) {}
+
+	open val crossfeedState: StateFlow<CrossfeedUiState> = MutableStateFlow(CrossfeedUiState()).asStateFlow()
+	open fun setCrossfeedEnabled(enabled: Boolean) {}
+	open fun setCrossfeedMode(mode: Int) {}
+
+	open val stereoEnhancementState: StateFlow<StereoEnhancementUiState> = MutableStateFlow(StereoEnhancementUiState()).asStateFlow()
+	open fun setStereoEnhancementEnabled(enabled: Boolean) {}
+	open fun setStereoEnhancementLevel(level: Float) {}
+
+	open val vacuumTubeState: StateFlow<VacuumTubeUiState> = MutableStateFlow(VacuumTubeUiState()).asStateFlow()
+	open fun setVacuumTubeEnabled(enabled: Boolean) {}
+	open fun setVacuumTubeDrive(driveDb: Float) {}
+
+	// Phase 3: device-preset (AutoEq GraphicEQ) correction curve. See GraphicEqUiState's kdoc.
+	open val graphicEqState: StateFlow<GraphicEqUiState> = MutableStateFlow(GraphicEqUiState()).asStateFlow()
+	open fun setGraphicEqEnabled(enabled: Boolean) {}
+	open fun applyGraphicEqCurve(deviceName: String, measurementSource: String, curveString: String) {}
 
 	fun playNow(song: DomainSong) {
 		clearQueue()

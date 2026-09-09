@@ -93,6 +93,14 @@ sealed interface Screen : NavKey {
 
 	@Immutable
 	@Serializable
+	data object SoundEffects : Screen
+
+	@Immutable
+	@Serializable
+	data object DevicePreset : Screen
+
+	@Immutable
+	@Serializable
 	data class CollectionDetail(
 		val collectionId: String,
 		val tab: String
