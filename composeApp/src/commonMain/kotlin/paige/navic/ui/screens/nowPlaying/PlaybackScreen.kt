@@ -31,6 +31,7 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -155,6 +156,7 @@ fun PlaybackSpeedScreen() {
 
 	val selectedSpeed = playerState.playbackSpeed
 	val selectedPitch = playerState.playbackPitch
+	val bassBoostState by player.bassBoostState.collectAsStateWithLifecycle()
 
 	// Which display mode starts selected reflects whether the current pitch already lands on a
 	// semitone; switching modes afterwards never mutates the underlying pitch value.
@@ -223,6 +225,24 @@ fun PlaybackSpeedScreen() {
 				multiplierPresets = multiplierPresets,
 				semitonePresets = semitonePresets,
 				onPitchChange = { player.setPlaybackPitch(it) }
+			)
+		}
+
+		item {
+			Spacer(Modifier.height(4.dp))
+			HorizontalDivider(modifier = Modifier.padding(horizontal = 12.dp))
+			Spacer(Modifier.height(4.dp))
+		}
+
+		item {
+			// Phase 1 native JamesDSP pipeline proof of concept — deliberately bare-bones (no string
+			// resources, no Phase 2 visual polish). Toggling this exercises the whole native chain:
+			// Kotlin -> JNI -> libjamesdsp-wrapper -> libjamesdsp, end to end.
+			BassBoostSection(
+				enabled = bassBoostState.enabled,
+				gainDb = bassBoostState.gainDb,
+				onEnabledChange = { player.setBassBoostEnabled(it) },
+				onGainChange = { player.setBassBoostGain(it) }
 			)
 		}
 	}
@@ -344,6 +364,54 @@ private fun PlaybackPitchSection(
 			MultiplierPresetsRow(presets = multiplierPresets, selected = pitch, onSelect = onPitchChange)
 		}
 	}
+
+	Spacer(Modifier.height(16.dp))
+}
+
+// Phase 1 native JamesDSP pipeline proof of concept: a bare toggle + gain slider, just enough
+// to drive JamesDspWrapper.setBassBoost() end to end and confirm the whole native chain works.
+// Not the intended Phase 2 UI/placement (see BassBoostController's kdoc).
+@Composable
+private fun BassBoostSection(
+	enabled: Boolean,
+	gainDb: Float,
+	onEnabledChange: (Boolean) -> Unit,
+	onGainChange: (Float) -> Unit
+) {
+	Row(
+		modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+		horizontalArrangement = Arrangement.SpaceBetween,
+		verticalAlignment = Alignment.CenterVertically
+	) {
+		Column {
+			Text(
+				text = "Bass Boost (native, Phase 1)",
+				style = MaterialTheme.typography.labelLarge,
+				color = MaterialTheme.colorScheme.onSurfaceVariant
+			)
+			Text(
+				text = "+${gainDb.roundToInt()} dB",
+				style = MaterialTheme.typography.titleMedium,
+				color = MaterialTheme.colorScheme.primary
+			)
+		}
+		Switch(checked = enabled, onCheckedChange = onEnabledChange)
+	}
+
+	Spacer(Modifier.height(8.dp))
+
+	Slider(
+		value = gainDb,
+		onValueChange = onGainChange,
+		valueRange = 0f..12f,
+		enabled = enabled,
+		modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+		colors = SliderDefaults.colors(
+			thumbColor = MaterialTheme.colorScheme.primary,
+			activeTrackColor = MaterialTheme.colorScheme.primary,
+			inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.24f)
+		)
+	)
 
 	Spacer(Modifier.height(16.dp))
 }

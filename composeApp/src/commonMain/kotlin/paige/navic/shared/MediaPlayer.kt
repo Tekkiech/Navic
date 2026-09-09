@@ -21,6 +21,7 @@ import paige.navic.domain.models.DomainSongCollection
 import paige.navic.domain.models.settings.ExplicitContentPlayback
 import paige.navic.domain.repositories.PlayerStateRepository
 import paige.navic.domain.repositories.SongRepository
+import paige.navic.shared.dsp.BassBoostUiState
 import paige.navic.ui.core.PlayerUiState
 import kotlin.time.Duration.Companion.seconds
 
@@ -68,6 +69,13 @@ abstract class MediaPlayerViewModel(
 	abstract fun shufflePlay(collection: DomainSongCollection)
 	abstract fun setPlaybackSpeed(value: Float)
 	abstract fun setPlaybackPitch(value: Float)
+
+	// Phase 1 proof-of-concept for the native JamesDSP pipeline (see androidApp/src/main/cpp).
+	// Android-only for now: iOS keeps the no-op defaults below until the native module grows an
+	// iOS target. Deliberately not abstract, so this doesn't block the iOS actual implementation.
+	open val bassBoostState: StateFlow<BassBoostUiState> = MutableStateFlow(BassBoostUiState()).asStateFlow()
+	open fun setBassBoostEnabled(enabled: Boolean) {}
+	open fun setBassBoostGain(gainDb: Float) {}
 
 	fun playNow(song: DomainSong) {
 		clearQueue()

@@ -13,6 +13,7 @@ val isTaskRelease = gradle.startParameter.taskNames.any { it.contains("release",
 extensions.configure<ApplicationExtension> {
 	namespace = "paige.navic.androidApp"
 	compileSdk = libs.versions.android.compileSdk.get().toInt()
+	ndkVersion = "27.2.12479018"
 
 	buildFeatures {
 		resValues = true
@@ -30,6 +31,19 @@ extensions.configure<ApplicationExtension> {
 			if (!isTaskRelease) {
 				abiFilters.add("x86_64")
 			}
+		}
+
+		externalNativeBuild {
+			cmake {
+				cppFlags += "-std=c++17"
+			}
+		}
+	}
+
+	externalNativeBuild {
+		cmake {
+			path = file("src/main/cpp/CMakeLists.txt")
+			version = "3.22.1"
 		}
 	}
 

@@ -46,6 +46,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -73,6 +74,10 @@ import paige.navic.domain.models.settings.EqualiserMode
 import paige.navic.domain.models.settings.ReplayGainMode
 import paige.navic.domain.repositories.PlayerStateRepository
 import paige.navic.domain.repositories.SongRepository
+import paige.navic.shared.dsp.BassBoostUiState
+import paige.navic.shared.dsp.BassBoostController
+import paige.navic.shared.dsp.JamesDspAudioProcessor
+import paige.navic.shared.dsp.JamesDspRenderersFactory
 import paige.navic.ui.core.PlayerUiState
 import paige.navic.util.core.Logger
 import paige.navic.util.core.ResourceProvider
@@ -103,6 +108,10 @@ class PlaybackService : MediaSessionService(), KoinComponent {
 	private var currentAudioSessionId: Int = C.AUDIO_SESSION_ID_UNSET
 	private var equaliserMode: EqualiserMode = EqualiserMode.Disabled
 
+	// Phase 1 native JamesDSP pipeline proof of concept (see androidApp/src/main/cpp). Allocated
+	// once the player/audio sink exist, freed alongside the rest of the session in onDestroy().
+	private val jamesDspAudioProcessor = JamesDspAudioProcessor()
+
 	override fun onCreate() {
 		super.onCreate()
 		val loadControl = DefaultLoadControl.Builder()
@@ -125,7 +134,7 @@ class PlaybackService : MediaSessionService(), KoinComponent {
 		val dataSourceFactory = DefaultDataSource.Factory(this, httpDataSourceFactory)
 		val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
 
-		val player = ExoPlayer.Builder(this)
+		val player = ExoPlayer.Builder(this, JamesDspRenderersFactory(this, jamesDspAudioProcessor))
 			.setLoadControl(loadControl)
 			.setMediaSourceFactory(mediaSourceFactory)
 			.setHandleAudioBecomingNoisy(true)
@@ -190,6 +199,8 @@ class PlaybackService : MediaSessionService(), KoinComponent {
 		equaliserMode = equaliserManager.config.value.mode
 		applyEqualiserMode(equaliserMode, currentAudioSessionId)
 
+		jamesDspAudioProcessor.start()
+
 		player.addListener(object : Player.Listener {
 			override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
 				mediaSession?.setCustomLayout(makeButtons(player))
@@ -226,6 +237,7 @@ class PlaybackService : MediaSessionService(), KoinComponent {
 	}
 
 	override fun onDestroy() {
+		jamesDspAudioProcessor.release()
 		closeAudioEffectSession(audioEffectSessionId)
 		releaseEqualiser()
 		scrobbleManager?.release()
@@ -1119,6 +1131,19 @@ class AndroidMediaPlayerViewModel(
 		val speed = _uiState.value.playbackSpeed
 		pendingPlaybackParameters.value = PlaybackParameters(speed, value)
 		_uiState.update { it.copy(playbackPitch = value) }
+	}
+
+	// Phase 1 native JamesDSP pipeline proof of concept. BassBoostController bridges this
+	// ViewModel to the JamesDspAudioProcessor instance living inside PlaybackService's audio
+	// pipeline (same process, see BassBoostController's kdoc for why a singleton is fine here).
+	override val bassBoostState: StateFlow<BassBoostUiState> = BassBoostController.state
+
+	override fun setBassBoostEnabled(enabled: Boolean) {
+		BassBoostController.setEnabled(enabled)
+	}
+
+	override fun setBassBoostGain(gainDb: Float) {
+		BassBoostController.setGainDb(gainDb)
 	}
 
 	private fun DomainSong.toMediaItem(): MediaItem {
